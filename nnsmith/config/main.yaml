@@ -53,6 +53,8 @@ fuzz:
   crash_safe: false
   test_timeout: null
   save_test: null
+  covlib: null # mutfuzz
+  num_init_gen: 256 # mutfuzz
 
 filter:
   type: []
