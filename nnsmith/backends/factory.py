@@ -318,56 +318,36 @@ class BackendFactory(ABC):
         if target == "gpu":
             target = "cuda"  # `gpu` means `cuda` by default.
 
-        if name == "onnxruntime":
+        if name == "torchjit":
+            from nnsmith.backends.torchjit import TorchJITFactory
+
+            return TorchJITFactory(target=target, optmax=optmax, **kwargs)
+        elif name == "onnxruntime":
             from nnsmith.backends.onnxruntime import ORTFactory
 
-            return ORTFactory(
-                target=target,
-                optmax=optmax,
-                **kwargs,
-            )
+            return ORTFactory(target=target, optmax=optmax, **kwargs)
         elif name == "tvm":
             from nnsmith.backends.tvm import TVMFactory
 
             # default executor is graph
             kwargs["executor"] = kwargs.get("executor", "graph")
-            return TVMFactory(
-                target=target,
-                optmax=optmax,
-                **kwargs,
-            )
+            return TVMFactory(target=target, optmax=optmax, **kwargs)
         elif name == "tensorrt":
             from nnsmith.backends.tensorrt import TRTFactory
 
-            return TRTFactory(
-                target=target,
-                optmax=optmax,
-                **kwargs,
-            )
+            return TRTFactory(target=target, optmax=optmax, **kwargs)
         elif name == "tflite":
             from nnsmith.backends.tflite import TFLiteFactory
 
-            return TFLiteFactory(
-                target=target,
-                optmax=optmax,
-                **kwargs,
-            )
+            return TFLiteFactory(target=target, optmax=optmax, **kwargs)
         elif name == "xla":
             from nnsmith.backends.xla import XLAFactory
 
-            return XLAFactory(
-                target=target,
-                optmax=optmax,
-                **kwargs,
-            )
+            return XLAFactory(target=target, optmax=optmax, **kwargs)
         elif name == "iree":
             from nnsmith.backends.iree import IREEFactory
 
-            return IREEFactory(
-                target=target,
-                optmax=optmax,
-                **kwargs,
-            )
+            return IREEFactory(target=target, optmax=optmax, **kwargs)
         else:
             raise ValueError(f"unknown backend: {name}")
 
