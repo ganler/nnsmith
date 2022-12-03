@@ -22,8 +22,11 @@ class AbsTensor:
     def __hash__(self) -> int:
         return hash((tuple(self.shape), self.dtype))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"AbsTensor<{self.dtype.short()}>{str(self.shape)}"
+
+    def pretty(self) -> str:
+        return f"{self.dtype.short()}{self.shape}"
 
     def weak_compare(self, other: "AbsTensor") -> bool:
         if self.dtype != other.dtype or self.ndims != other.ndims:

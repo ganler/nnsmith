@@ -1,4 +1,4 @@
-from nnsmith.graph_gen import random_model_gen, SymbolNet
+from nnsmith.graph_gen import model_gen, SymbolNet
 from nnsmith.materialize.torch.input_gen import PracticalHybridSearch
 from nnsmith.materialize.onnx.export import torch2onnx
 from nnsmith.dtype_test import rewrite_op_dtype
@@ -27,7 +27,7 @@ def nnsmith_gen_once(
 
     torch.manual_seed(seed)
     gen_tstart = time.time()
-    gen, solution = random_model_gen(
+    gen, solution = model_gen(
         init_rank=4,
         seed=seed,
         max_nodes=max_nodes,

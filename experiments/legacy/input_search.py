@@ -22,7 +22,7 @@ import networkx as nx
 
 from nnsmith.materialize.onnx.export import torch2onnx
 from nnsmith.util import mkdir
-from nnsmith.graph_gen import random_model_gen, SymbolNet, random_tensor
+from nnsmith.graph_gen import model_gen, SymbolNet, random_tensor
 from nnsmith.materialize.torch.input_gen import GradSearch, SamplingSearch
 from nnsmith.dtype_test import rewrite_op_dtype
 from nnsmith.abstract.op import ALL_OP_TYPES
@@ -30,7 +30,7 @@ from nnsmith.abstract.op import ALL_OP_TYPES
 
 def mknet(args, differentiable_ops=None):
     model_seed = random.getrandbits(32)
-    gen, solution = random_model_gen(
+    gen, solution = model_gen(
         mode=args.mode,
         seed=model_seed,
         max_nodes=args.max_nodes,

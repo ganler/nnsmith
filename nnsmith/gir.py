@@ -79,7 +79,9 @@ class InstIR:
                             inst.users[ret_idx].add(self)
 
     def __str__(self):
-        return f"{', '.join(self.retvals())} = {self.iexpr} \t{self.identifier}"
+        return (
+            f"{', '.join(self.retvals())} = {self.iexpr} \t# inst id: {self.identifier}"
+        )
 
     def no_users(self):
         return all(len(u) == 0 for u in self.users)
@@ -448,7 +450,7 @@ class GraphIR:
         for inst in self.insts:
             for idx, arg in enumerate(inst.iexpr.args):
                 usee_id, ret_idx = InstIR.var_inst_idx(arg)
-                text += f"  {usee_id}:o{ret_idx} -> {inst.identifier}:i{idx};\n"
+                text += f'  {usee_id}:o{ret_idx} -> {inst.identifier}:i{idx} [label="{self.vars[arg].pretty()}"];\n'
 
         text += "}\n"
         return text

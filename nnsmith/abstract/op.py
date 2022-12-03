@@ -331,8 +331,7 @@ class AbsOpBase(ABC):
 
     @check_shape_fn  # Public API.
     def checked_type_transfer(self, input_shapes: List[AbsTensor]) -> List[AbsTensor]:
-        self.last_outs = self.type_transfer(input_shapes)
-        return self.last_outs
+        return self.type_transfer(input_shapes)
 
     # Overload me!
     # Extra constraints for the input tensors.
@@ -351,7 +350,7 @@ class AbsOpBase(ABC):
         return self.requires(input_shapes)
 
     def n_floats(self, input_shapes: List[AbsTensor]) -> z3.ExprRef:
-        return reduce(nnsmith_add, [i.nelement() for i in self.last_outs])
+        return reduce(nnsmith_add, [i.nelement() for i in self.output_like])
 
     def flops(self, input_shapes):
         return 0
@@ -368,47 +367,6 @@ class AbsOpBase(ABC):
         if hasattr(cls, "dialect"):
             return cls.dialect + "." + cls.__name__.split(".")[-1]
         return cls.__name__.split(".")[-1]
-
-
-def concretize_op(op: AbsOpBase, model: Optional[z3.ModelRef]) -> AbsOpBase:
-    if isinstance(op, Constant) or isinstance(op, Input):
-        ret_op = deepcopy(op)
-        values = []
-
-        for idx, s in enumerate(op.abs_tensor.shape):
-            if isinstance(s, z3.ExprRef):
-                ret_op.abs_tensor.shape[idx] = model.eval(s).as_long()
-
-        return ret_op
-
-    # Non-inp / const types.
-    construct_param_dict = signature(op.__init__).parameters
-    values = []
-    symbolic_idx = []
-
-    if op.num_var_param is not None:
-        # input is a variable list.
-        key = list(construct_param_dict.keys())[0]
-        values = list(getattr(op, key))
-        symbolic_idx = [
-            i for i in range(len(values)) if isinstance(values[i], z3.ExprRef)
-        ]
-    else:
-        for idx, key in enumerate(construct_param_dict):
-            param = getattr(op, key)
-            values.append(param)
-            if isinstance(param, z3.ExprRef):
-                symbolic_idx.append(idx)
-
-    for idx in symbolic_idx:
-        values[idx] = model.eval(values[idx]).as_long()
-
-    concrete_op = type(op)(*values)
-    concrete_op.inp_ranks = op.inp_ranks
-    concrete_op.out_ranks = op.out_ranks
-    concrete_op.extra_attrs = op.extra_attrs
-
-    return concrete_op
 
 
 class UnaryOpBase(AbsOpBase):
@@ -576,7 +534,6 @@ Mul: Type[BcastBinaryOp1] = mark_materialize("core")(
         {"__module__": __name__},
     )
 )
-# NOTE(JK): didn't find multi-input version of Max and Min in torch, so assume binary ops
 Max: Type[BcastBinaryOp1] = mark_materialize("core")(
     type(
         "Max",
@@ -2161,6 +2118,55 @@ class MatMul(BinaryOpBase):
             (ranks[0] + ranks[1], out_abs_tensor[0].dtype),
             (ranks[2] + ranks[3], out_abs_tensor[0].dtype),
         ]
+
+
+def concretize_op(
+    op: Union[AbsOpBase, Placeholder], model: Optional[z3.ModelRef]
+) -> Union[AbsOpBase, Placeholder]:
+    if isinstance(op, Constant) or isinstance(op, Input):
+        ret_op = deepcopy(op)
+        values = []
+
+        for idx, s in enumerate(op.abs_tensor.shape):
+            if isinstance(s, z3.ExprRef):
+                ret_op.abs_tensor.shape[idx] = model.eval(s).as_long()
+
+        return ret_op
+    elif isinstance(op, Placeholder):
+        shape = []
+        for idx, s in enumerate(op.ttype.shape):
+            if isinstance(s, z3.ExprRef):
+                shape.append(model.eval(s).as_long())
+        return Placeholder(AbsTensor(shape=shape, dtype=op.ttype.dtype))
+
+    # Non-inp / const types.
+    construct_param_dict = signature(op.__init__).parameters
+    values = []
+    symbolic_idx = []
+
+    if op.num_var_param is not None:
+        # input is a variable list.
+        key = list(construct_param_dict.keys())[0]
+        values = list(getattr(op, key))
+        symbolic_idx = [
+            i for i in range(len(values)) if isinstance(values[i], z3.ExprRef)
+        ]
+    else:
+        for idx, key in enumerate(construct_param_dict):
+            param = getattr(op, key)
+            values.append(param)
+            if isinstance(param, z3.ExprRef):
+                symbolic_idx.append(idx)
+
+    for idx in symbolic_idx:
+        values[idx] = model.eval(values[idx]).as_long()
+
+    concrete_op = type(op)(*values)
+    concrete_op.inp_ranks = op.inp_ranks
+    concrete_op.out_ranks = op.out_ranks
+    concrete_op.extra_attrs = op.extra_attrs
+
+    return concrete_op
 
 
 _PRAGMA_ONCE_CORE_OP = False

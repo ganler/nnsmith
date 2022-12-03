@@ -14,7 +14,7 @@ from nnsmith.backends.factory import BackendFactory
 from nnsmith.cli.model_exec import verify_testcase
 from nnsmith.error import InternalError
 from nnsmith.filter import FILTERS
-from nnsmith.graph_gen import random_model_gen
+from nnsmith.graph_gen import model_gen
 from nnsmith.logging import FUZZ_LOG
 from nnsmith.macro import NNSMITH_BUG_PATTERN_TOKEN
 from nnsmith.materialize import Model, TestCase
@@ -155,17 +155,17 @@ class FuzzingLoop:
 
     def make_testcase(self, seed) -> TestCase:
         mgen_cfg = self.cfg["mgen"]
-        gen = random_model_gen(
+        gen = model_gen(
             opset=self.opset,
             seed=seed,
             max_nodes=mgen_cfg["max_nodes"],
             timeout_ms=mgen_cfg["timeout_ms"],
         )
 
-        gen.ir.concretize(gen.get_sat_model())
-        model = self.ModelType.from_gir(gen.ir)
+        ir = gen.make_concrete()
+        model = self.ModelType.from_gir(ir)
         if self.cfg["debug"]["viz"]:
-            model.attach_viz(gen.ir)
+            model.attach_viz(ir)
 
         model.refine_weights()  # either random generated or gradient-based.
         oracle = model.make_oracle()

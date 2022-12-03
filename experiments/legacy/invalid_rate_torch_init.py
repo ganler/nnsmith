@@ -3,12 +3,12 @@ import random
 
 from tqdm import tqdm
 
-from nnsmith.graph_gen import random_model_gen, SymbolNet
+from nnsmith.graph_gen import model_gen, SymbolNet
 
 
 def mknet(args):
     model_seed = random.getrandbits(32)
-    gen, solution = random_model_gen(
+    gen, solution = model_gen(
         mode=args.mode, seed=model_seed, max_nodes=args.max_nodes, init_fp=True
     )
     net = SymbolNet(gen.abstract_graph, solution, alive_shapes=gen.alive_shapes)
