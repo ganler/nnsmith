@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import time
 
 import hydra
 from omegaconf import DictConfig
@@ -37,6 +38,8 @@ def main(cfg: DictConfig):
     else:
         factory = None
 
+    # GENERATION
+    tgen_begin = time.time()
     gen = model_gen(
         opset=auto_opset(ModelType, factory, vulops=mgen_cfg["vulops"]),
         method=mgen_cfg["method"],
@@ -44,6 +47,7 @@ def main(cfg: DictConfig):
         max_nodes=mgen_cfg["max_nodes"],
         timeout_ms=mgen_cfg["timeout_ms"],
     )
+    tgen = time.time() - tgen_begin
 
     if isinstance(gen, SymbolicGen):
         MGEN_LOG.info(
@@ -53,6 +57,8 @@ def main(cfg: DictConfig):
         if MGEN_LOG.getEffectiveLevel() <= logging.DEBUG:
             MGEN_LOG.debug("solution:" + ", ".join(map(str, gen.last_solution)))
 
+    # MATERIALIZATION
+    tmat_begin = time.time()
     ir = gen.make_concrete()
 
     MGEN_LOG.info(
@@ -67,6 +73,8 @@ def main(cfg: DictConfig):
     model = ModelType.from_gir(ir)
     model.refine_weights()  # either random generated or gradient-based.
     oracle = model.make_oracle()
+    tmat = time.time() - tmat_begin
+    MGEN_LOG.info(f"Time:  @Generation: {tgen:.2f}s  @Materialization: {tmat:.2f}s")
 
     testcase = TestCase(model, oracle)
     testcase.dump(root_folder=mgen_cfg["save"])

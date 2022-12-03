@@ -157,6 +157,7 @@ class FuzzingLoop:
         mgen_cfg = self.cfg["mgen"]
         gen = model_gen(
             opset=self.opset,
+            method=mgen_cfg["method"],
             seed=seed,
             max_nodes=mgen_cfg["max_nodes"],
             timeout_ms=mgen_cfg["timeout_ms"],

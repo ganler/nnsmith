@@ -32,6 +32,7 @@ mgen: # model gen.
   method: "symbolic"
   save: "nnsmith_output"
   seed: null
+  max_elem_per_tensor: 2097152 # 2^21
 
 # backend config
 backend:

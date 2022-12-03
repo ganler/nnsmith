@@ -227,8 +227,9 @@ def auto_opconfig(
         os.makedirs(NNSMITH_CACHE_DIR)
     if os.path.exists(cache_path):
         DTEST_LOG.info(f"Loading topset from {cache_path}.")
-        DTEST_LOG.info("To regenerate the topset, delete the cache file and restart.")
-        DTEST_LOG.info(f"rm {cache_path}")
+        DTEST_LOG.info(
+            "To regenerate the topset, delete the cache file above and restart."
+        )
         return load_topset(cache_path)
     else:
         DTEST_LOG.info(f"Inferring topset from scratch and cache it to {cache_path}.")

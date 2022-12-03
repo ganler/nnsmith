@@ -42,6 +42,7 @@ class BaseGen:
         seed=None,
         forward_prob=None,
         ph_dim_range=(16, 64),
+        max_elem_per_tensor=2**21,
     ):
         assert len(opset) > 0, "opset must not be empty"
         if seed is not None:
@@ -56,9 +57,15 @@ class BaseGen:
         # for all (including newly created tmp) placeholders
         self.forward_prob = 0.5 if forward_prob is None else forward_prob
         self.ph_dim_range = ph_dim_range
+        self.max_elem_per_tensor = max_elem_per_tensor
 
     def random_rank(self):
         return random.choice(rank_all())
+
+    def tensor_type_constraints(
+        self, atensor: AbsTensor
+    ) -> List[Union[z3.BoolRef, bool]]:
+        return [atensor.nelement() <= self.max_elem_per_tensor]
 
     @abstractmethod
     def assume(self, c: Union[z3.BoolRef, bool]):
@@ -376,11 +383,10 @@ class SymbolicGen(BaseGen):
         self,
         opset,
         seed=None,
-        forward_prob=None,
         init_fp=False,
-        ph_dim_range=(16, 64),
+        **kwargs,
     ):
-        super().__init__(opset, seed, forward_prob, ph_dim_range)
+        super().__init__(opset, seed, **kwargs)
         if seed is not None:
             z3.set_param(
                 "smt.phase_selection",
@@ -533,13 +539,10 @@ class ConcolicGen(BaseGen):
     def __init__(
         self,
         opset,
-        seed=None,
-        forward_prob=None,
         init_fp=False,
-        ph_dim_range=(16, 64),
-        # TODO(@ganler): Concrete records...
+        **kwargs,
     ):
-        super().__init__(opset, seed, forward_prob, ph_dim_range)
+        super().__init__(opset, **kwargs)
 
         # Insert the first node.
         self.insert_init_ph_node(
@@ -578,6 +581,13 @@ class ConcolicGen(BaseGen):
             MGEN_LOG.debug(f">> Forward insert: {node}")
             MGEN_LOG.debug(f"\tinputs:  {itensors}")
             MGEN_LOG.debug(f"\toutputs: {otensors}")
+
+        # Shape checker.
+        # NOTE: No need to check input shape as they are already checked for being in the graph.
+        for i, ten in enumerate(otensors):
+            if not all(self.tensor_type_constraints(ten)):
+                MGEN_LOG.debug(f"{i}-th output type constraint failed: {ten}")
+                return False
 
         node.bind_input_like(itensors)
         node.bind_output_like(otensors)
@@ -626,19 +636,28 @@ class ConcolicGen(BaseGen):
 
         model = solver.model()
         # succ.
-        input_vars = []
-
         itensors = []
-        for ph in phs_as_op_inputs:
+        for i, ph in enumerate(phs_as_op_inputs):
             # materialize ph
-            ph = concretize_op(ph, model)
-            inst = self.forward_insert_node(ph, [])
-            input_vars.append(inst.retval())
-            itensors.append(ph.ttype)
+            phs_as_op_inputs[i] = concretize_op(ph, model)
+            itensors.append(phs_as_op_inputs[i].ttype)
+
+        # Input Shape checker.
+        # NOTE: No need to check output because they are already in the graph thus valid.
+        for i, ten in enumerate(itensors):
+            if not all(self.tensor_type_constraints(ten)):
+                MGEN_LOG.debug(f"{i}-th input type constraint failed: {ten}")
+                return False
 
         node = concretize_op(node, model)
         node.bind_input_like(itensors)
         node.bind_output_like(otensors)
+
+        # Apply insertion.
+        input_vars = []
+        for ph in phs_as_op_inputs:
+            inst = self.forward_insert_node(ph, [])
+            input_vars.append(inst.retval())
 
         self.backward_insert_node(node, input_vars, phvars)
 
