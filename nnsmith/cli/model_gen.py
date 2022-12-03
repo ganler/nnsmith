@@ -39,9 +39,10 @@ def main(cfg: DictConfig):
         factory = None
 
     # GENERATION
+    opset = auto_opset(ModelType, factory, vulops=mgen_cfg["vulops"])
     tgen_begin = time.time()
     gen = model_gen(
-        opset=auto_opset(ModelType, factory, vulops=mgen_cfg["vulops"]),
+        opset=opset,
         method=mgen_cfg["method"],
         seed=seed,
         max_nodes=mgen_cfg["max_nodes"],
