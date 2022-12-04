@@ -42,7 +42,7 @@ class BaseGen:
         seed=None,
         forward_prob=None,
         ph_dim_range=(16, 64),
-        max_elem_per_tensor=2**21,
+        max_elem_per_tensor=2**16,
     ):
         assert len(opset) > 0, "opset must not be empty"
         if seed is not None:
@@ -85,9 +85,21 @@ class BaseGen:
 
     def make_concrete_placeholder(self, rank, dtype=None):
         l, r = self.ph_dim_range
+        shape = []
+        product = 1
+        for _ in range(rank):
+            v = random.randint(l, r)
+            if product * v > self.max_elem_per_tensor:
+                v = 1
+            shape.append(v)
+            product *= v
+
+        # shuffle
+        random.shuffle(shape)
+
         ph = Placeholder(
             AbsTensor(
-                shape=[random.randint(l, r) for _ in range(rank)],
+                shape=shape,
                 dtype=dtype if dtype is not None else self.random_dtype(),
             )
         )
