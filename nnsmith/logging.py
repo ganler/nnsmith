@@ -7,6 +7,7 @@ SMT_LOG = logging.getLogger("smt")
 EXEC_LOG = logging.getLogger("exec")
 DTEST_LOG = logging.getLogger("dtest")
 CORE_LOG = logging.getLogger("core")
+AUTOINF_LOG = logging.getLogger("autoinf")
 
 TF_LOG = logging.getLogger("gen|tf")
 TORCH_LOG = logging.getLogger("gen|torch")
