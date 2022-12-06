@@ -41,7 +41,7 @@ class BaseGen:
         opset,
         seed=None,
         forward_prob=None,
-        ph_dim_range=(16, 64),
+        ph_dim_range=(1, 64),
         max_elem_per_tensor=2**16,
     ):
         assert len(opset) > 0, "opset must not be empty"
@@ -403,9 +403,8 @@ class SymbolicGen(BaseGen):
             z3.set_param(
                 "smt.phase_selection",
                 5,
-                # TODO(@ganler): re-enable this when having a usable op memory estimator.
-                # "smt.arith.random_initial_value",
-                # True,
+                "smt.arith.random_initial_value",
+                True,
                 "smt.random_seed",
                 seed,
                 "sat.random_seed",
@@ -420,11 +419,12 @@ class SymbolicGen(BaseGen):
         self.last_solution: Optional[z3.ModelRef] = None
 
         # Insert the first node.
-        self.insert_init_ph_node(
-            self.make_symbolic_placeholder(
-                self.random_rank(), dtype=DType.float32 if init_fp else None
-            )
+        ph = self.make_symbolic_placeholder(
+            self.random_rank(), dtype=DType.float32 if init_fp else None
         )
+        self.insert_init_ph_node(ph)
+        for pred in self.tensor_type_constraints(ph.ttype):
+            self.assume(pred)
 
     def assume(self, c: z3.BoolRef):
         self.solver.add(c)
@@ -448,6 +448,10 @@ class SymbolicGen(BaseGen):
         for aten in otensors:
             for c in aten.gt_zero():
                 constraints.append(c)
+
+        # limit output tensor size
+        for aten in otensors:
+            constraints.extend(self.tensor_type_constraints(aten))
 
         check_res = self.check_sat(*constraints)
 
@@ -499,6 +503,7 @@ class SymbolicGen(BaseGen):
             )
             phs_as_op_inputs.append(ph)
             constraints.extend(ph.ttype.gt_zero())
+            constraints.extend(self.tensor_type_constraints(ph.ttype))
 
         itensors = [p.ttype for p in phs_as_op_inputs]
         constraints.extend(node.checked_requires(itensors))
@@ -551,10 +556,26 @@ class ConcolicGen(BaseGen):
     def __init__(
         self,
         opset,
+        seed=None,
         init_fp=False,
         **kwargs,
     ):
         super().__init__(opset, **kwargs)
+        if seed is not None:
+            z3.set_param(
+                "smt.phase_selection",
+                5,
+                "smt.arith.random_initial_value",
+                True,
+                "smt.random_seed",
+                seed,
+                "sat.random_seed",
+                seed,
+                "sat.phase",
+                "random",
+                "memory_max_size",
+                50 * 1024,  # MB
+            )
 
         # Insert the first node.
         self.insert_init_ph_node(

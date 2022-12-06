@@ -75,10 +75,15 @@ def main(cfg: DictConfig):
     model.refine_weights()  # either random generated or gradient-based.
     oracle = model.make_oracle()
     tmat = time.time() - tmat_begin
-    MGEN_LOG.info(f"Time:  @Generation: {tgen:.2f}s  @Materialization: {tmat:.2f}s")
 
+    tsave_begin = time.time()
     testcase = TestCase(model, oracle)
     testcase.dump(root_folder=mgen_cfg["save"])
+    tsave = time.time() - tsave_begin
+
+    MGEN_LOG.info(
+        f"Time:  @Generation: {tgen:.2f}s  @Materialization: {tmat:.2f}s  @Save: {tsave:.2f}s"
+    )
 
 
 if __name__ == "__main__":
