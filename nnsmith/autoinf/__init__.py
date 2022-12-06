@@ -13,6 +13,24 @@ def make_reduce_type(axis) -> Type[ReduceBase]:
     return Reduce
 
 
+def make_concat_type(arity, axis) -> Type[Concat]:
+    class ConcatVariant(Concat):
+        in_dtypes = [tuple(i for _ in range(arity)) for i in DTYPE_ALL]
+
+        def __init__(self):
+            super().__init__(arity)
+
+        def _init_concat_dim(self, input_shape):
+            self.extra_attrs["concat_dim"] = axis
+            return self.extra_attrs["concat_dim"]
+
+        def _init_concat_axis(self, input_shapes: List[AbsTensor]) -> int:
+            self.extra_attrs["axis"] = axis
+            return self.extra_attrs["axis"]
+
+    return ConcatVariant
+
+
 ATTR_FREE_RULES = [
     ElementWiseUnaryOp,
     BcastBinaryOp,
@@ -20,12 +38,11 @@ ATTR_FREE_RULES = [
     *[make_reduce_type(i) for i in range(__MAX_RANK__)],
     Tril,
     Triu,
-    Concat1,
-    Concat2,
-    Concat3,
-    Concat4,
-    Concat5,
-    MatMul,
+    *[
+        make_concat_type(arity, axis)
+        for arity in range(1, Concat.MAX_ARITY + 1)
+        for axis in range(__MAX_RANK__)
+    ],
 ]
 
 """
