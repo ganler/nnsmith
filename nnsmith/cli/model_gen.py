@@ -6,6 +6,7 @@ import time
 import hydra
 from omegaconf import DictConfig
 
+from nnsmith.autoinf import make_record_finder
 from nnsmith.backends.factory import BackendFactory
 from nnsmith.graph_gen import SymbolicGen, model_gen, viz
 from nnsmith.logging import MGEN_LOG
@@ -40,11 +41,21 @@ def main(cfg: DictConfig):
 
     # GENERATION
     opset = auto_opset(ModelType, factory, vulops=mgen_cfg["vulops"])
+
+    record_finder = None
+    if "concolic-record" == mgen_cfg["method"]:
+        record_finder = make_record_finder(
+            path=mgen_cfg["record_path"],
+            max_elem_per_tensor=mgen_cfg["max_elem_per_tensor"],
+        )
+
     tgen_begin = time.time()
     gen = model_gen(
         opset=opset,
+        record_finder=record_finder,
         method=mgen_cfg["method"],
         seed=seed,
+        max_elem_per_tensor=mgen_cfg["max_elem_per_tensor"],
         max_nodes=mgen_cfg["max_nodes"],
         timeout_ms=mgen_cfg["timeout_ms"],
     )

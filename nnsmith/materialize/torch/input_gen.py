@@ -1,11 +1,11 @@
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
-import numpy as np
 import torch
 
 from nnsmith.abstract.op import DType
+from nnsmith.autoinf import AutoInfOpBase
 from nnsmith.materialize.torch.symbolnet import SymbolNet, random_tensor
 
 
@@ -90,7 +90,15 @@ class PracticalHybridSearch(InputSearchBase):
 
         self.differentiable = None
 
-        if all([DType.is_float(v.dtype) for _, v in self.net.input_like.items()]):
+        for inst in self.net.ir.insts:
+            op = inst.iexpr.op
+            if isinstance(op, AutoInfOpBase) and op.inst.name.endswith("_"):
+                self.differentiable = False
+                break
+
+        if self.differentiable is None and all(
+            [DType.is_float(v.dtype) for _, v in self.net.input_like.items()]
+        ):
             diff_test_inp = self.net.get_random_inps(use_cuda=self.use_cuda)
             for _, item in diff_test_inp.items():
                 item.requires_grad_()

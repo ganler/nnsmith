@@ -10,10 +10,10 @@ import z3
 
 from nnsmith.abstract.arith import *
 from nnsmith.abstract.dtype import (
-    DTYPE_ALL,
-    DTYPE_FLOATS,
-    DTYPE_INTS,
-    DTYPE_NON_BOOLS,
+    DTYPE_GEN_ALL,
+    DTYPE_GEN_FLOATS,
+    DTYPE_GEN_INTS,
+    DTYPE_GEN_NON_BOOL,
     DType,
 )
 from nnsmith.abstract.tensor import AbsTensor
@@ -370,8 +370,8 @@ class AbsOpBase(ABC):
 
 
 class UnaryOpBase(AbsOpBase):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
     def __init__(self):
         super().__init__()
@@ -379,8 +379,8 @@ class UnaryOpBase(AbsOpBase):
 
 
 class BinaryOpBase(AbsOpBase):
-    in_dtypes = [(i, i) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
     def __init__(self):
         super().__init__()
@@ -388,8 +388,8 @@ class BinaryOpBase(AbsOpBase):
 
 
 class TernaryOpBase(AbsOpBase):
-    in_dtypes = [(i, i, i) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i, i, i) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
     def __init__(self):
         super().__init__()
@@ -451,13 +451,13 @@ class BcastBinaryOp(BinaryOpBase):
 
 
 class BcastBinaryOp1(BcastBinaryOp):  # +-*/ max min
-    in_dtypes = [(i, i) for i in DTYPE_NON_BOOLS]
-    out_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_NON_BOOL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
     _bcast_out_dtypes = None
 
 
 class Comparator(BcastBinaryOp):  # > < =
-    in_dtypes = [(i, i) for i in DTYPE_ALL]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_ALL]
     out_dtypes = [(DType.bool,)]
     _bcast_out_dtypes = [DType.bool]
 
@@ -473,7 +473,7 @@ class Comparator(BcastBinaryOp):  # > < =
 
 
 class IntegerComparator(Comparator):  # > < = for integer
-    in_dtypes = [(i, i) for i in DTYPE_INTS]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_INTS]
 
 
 class Logical(Comparator):  # logical and or xor
@@ -482,8 +482,8 @@ class Logical(Comparator):  # logical and or xor
 
 @mark_materialize("core")
 class Where(TernaryOpBase):
-    in_dtypes = [(DType.bool, i, i) for i in DTYPE_NON_BOOLS]
-    out_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(DType.bool, i, i) for i in DTYPE_GEN_NON_BOOL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
     def __init__(self):
         super().__init__()
@@ -588,7 +588,7 @@ Xor: Type[Logical] = mark_materialize("core")(
 
 class Input(AbsOpBase):
     in_dtypes = [()]
-    out_dtypes = [(i,) for i in DTYPE_ALL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
     def __init__(self, dim: int):
         super().__init__()
@@ -623,7 +623,7 @@ class Input(AbsOpBase):
 
 class Constant(AbsOpBase):
     in_dtypes = [()]
-    out_dtypes = [(i,) for i in DTYPE_ALL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
     def __str__(self) -> str:
         return self.name() + " " + str(self.extra_attrs).replace(":", "=")
@@ -696,26 +696,26 @@ class Placeholder:
 # FIXME: Div will cause fuzzing crash. No integer to avoid division by zero.
 @mark_materialize("core")
 class Div(BcastBinaryOp):
-    in_dtypes = [(i, i) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core", limit_domain=True)
 class Pow(BcastBinaryOp):
-    in_dtypes = [(i, i) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class GELU(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class LeakyReLU(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
     def __init__(self):
         """See https://pytorch.org/docs/stable/generated/torch.nn.LeakyReLU.html"""
@@ -731,8 +731,8 @@ class PReLU(ElementWiseUnaryOp):
 
 @mark_materialize("core")
 class Sigmoid(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 class TrigonometricOp(ElementWiseUnaryOp):
@@ -741,96 +741,96 @@ class TrigonometricOp(ElementWiseUnaryOp):
 
 @mark_materialize("core")
 class Sin(TrigonometricOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class Cos(TrigonometricOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core", limit_domain=True)
 class Asin(TrigonometricOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core", limit_domain=True)
 class Acos(TrigonometricOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class Tan(TrigonometricOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class Atan(TrigonometricOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class Abs(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
 
 @mark_materialize("core")
 class ReLU(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class Ceil(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class Floor(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class Clip(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
 
 @mark_materialize("core")
 class Round(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core", limit_domain=True)
 class Sqrt(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core", limit_domain=True)
 class Log2(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class Neg(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
-    out_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
 
 @mark_materialize("core")
 class Softmax(ElementWiseUnaryOp):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
     def __init__(self, dim: Union[int, z3.ExprRef]):
         super().__init__()
@@ -844,8 +844,8 @@ class Softmax(ElementWiseUnaryOp):
 
 class Pool2d(UnaryOpBase):
     # TODO: distinguish stride_h and stride_w
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
     def __init__(
         self,
@@ -956,7 +956,7 @@ class AvgPool2d(Pool2d):
 class Slice(UnaryOpBase):
     # pytorch slice always exported as a stack of single-dim slices, so only model sinlge-dim slice here
     # pytorch slice only supports forward slicing, so only model forward slicing here
-    in_dtypes = [(i,) for i in DTYPE_ALL]
+    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
     INT_MAX = 2**63 - 1
     INT_MIN = -(2**63)
 
@@ -1066,8 +1066,8 @@ def _pad_num_var_param(rstart=1, max=None):
 
 class Pad(UnaryOpBase):
     num_var_param = _pad_num_var_param()
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
     def __str__(self) -> str:
         return f"{self.name()} (padding={list(self.padding_list)})"
@@ -1153,8 +1153,8 @@ class ReflectPad(Pad):
 
 
 class Expand(UnaryOpBase, ABC):
-    in_dtypes = [(i,) for i in DTYPE_ALL]
-    out_dtypes = [(i,) for i in DTYPE_ALL]
+    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
     # expand_dim cannot be symbolic. So just expand it.
 
     def __init__(self, expand_last_dim: int, expand_n: Union[int, z3.ExprRef]):
@@ -1518,8 +1518,8 @@ def random_group(n, k):
 @mark_materialize("core")
 class Reshape(UnaryOpBase):
     num_var_param = rank_range(1, 4)
-    in_dtypes = [(i,) for i in DTYPE_ALL]
-    out_dtypes = [(i,) for i in DTYPE_ALL]
+    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
     def __init__(self, *target_shape):
         super().__init__()
@@ -1617,7 +1617,7 @@ class Reshape(UnaryOpBase):
 
 @mark_materialize("core")
 class Transpose(UnaryOpBase):
-    in_dtypes = [(i,) for i in DTYPE_ALL]
+    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
     def __init__(self):
         """See https://pytorch.org/docs/stable/generated/torch.transpose.html"""
@@ -1663,8 +1663,8 @@ class Transpose(UnaryOpBase):
 class InterpBase(UnaryOpBase):
     num_var_param = rank_range(1, 3)
 
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
     def __init__(self, *size):
         super().__init__()
@@ -1763,7 +1763,7 @@ class ReduceBase(UnaryOpBase, ABC):
 
 @mark_materialize("core")
 class Squeeze(ReduceBase):
-    in_dtypes = [(i,) for i in DTYPE_ALL]
+    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
     def requires(self, input_shapes):
         reduce_dim = self._init_reduce_dim(input_shapes[0].shape)
@@ -1774,37 +1774,37 @@ class Squeeze(ReduceBase):
 
 @mark_materialize("core")
 class ReduceSum(ReduceBase):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
-    out_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
 
 @mark_materialize("core")
 class ReduceMin(ReduceBase):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
-    out_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
 
 @mark_materialize("core")
 class ReduceMax(ReduceBase):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
-    out_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
 
 @mark_materialize("core")
 class ReduceMean(ReduceBase):
-    in_dtypes = [(i,) for i in DTYPE_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_FLOATS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
 
 @mark_materialize("core")
 class ReduceProd(ReduceBase):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
-    out_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
 
 @mark_materialize("core")
 class ArgMin(ReduceBase):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
     out_dtypes = [(DType.int64,)]
     _reduce_out_dtype = DType.int64
 
@@ -1818,7 +1818,7 @@ class ArgMin(ReduceBase):
 
 @mark_materialize("core")
 class ArgMax(ReduceBase):
-    in_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
     out_dtypes = [(DType.int64,)]
     _reduce_out_dtype = DType.int64
 
@@ -1831,8 +1831,8 @@ class ArgMax(ReduceBase):
 
 
 class TriBase(UnaryOpBase):
-    in_dtypes = [(i,) for i in DTYPE_ALL]
-    out_dtypes = [(i,) for i in DTYPE_ALL]
+    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
     def __init__(self, diagonal: Union[int, z3.ExprRef]):
         super().__init__()
@@ -1872,7 +1872,7 @@ class Triu(TriBase):
 class Concat(AbsOpBase):
     MAX_ARITY = 5
     MAX_RANK = 5
-    out_dtypes = [(i,) for i in DTYPE_ALL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
     same_inp_dims = True
 
     def __str__(self) -> str:
@@ -1923,7 +1923,7 @@ class Concat(AbsOpBase):
 # the semantic of `in_dtypes` is not possible dtypes in "max rank". but simply in "rank". don't mess up the definition.
 @mark_materialize("core")
 class Concat1(Concat):
-    in_dtypes = [(i,) for i in DTYPE_ALL]
+    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
     def __init__(self):
         super().__init__(1)
@@ -1931,7 +1931,7 @@ class Concat1(Concat):
 
 @mark_materialize("core")
 class Concat2(Concat):
-    in_dtypes = [(i, i) for i in DTYPE_ALL]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_ALL]
 
     def __init__(self):
         super().__init__(2)
@@ -1939,7 +1939,7 @@ class Concat2(Concat):
 
 @mark_materialize("core")
 class Concat3(Concat):
-    in_dtypes = [(i, i, i) for i in DTYPE_ALL]
+    in_dtypes = [(i, i, i) for i in DTYPE_GEN_ALL]
 
     def __init__(self):
         super().__init__(3)
@@ -1947,7 +1947,7 @@ class Concat3(Concat):
 
 @mark_materialize("core")
 class Concat4(Concat):
-    in_dtypes = [(i, i, i, i) for i in DTYPE_ALL]
+    in_dtypes = [(i, i, i, i) for i in DTYPE_GEN_ALL]
 
     def __init__(self):
         super().__init__(4)
@@ -1955,14 +1955,14 @@ class Concat4(Concat):
 
 @mark_materialize("core")
 class Concat5(Concat):
-    in_dtypes = [(i, i, i, i, i) for i in DTYPE_ALL]
+    in_dtypes = [(i, i, i, i, i) for i in DTYPE_GEN_ALL]
 
     def __init__(self):
         super().__init__(5)
 
 
 class Cast(ElementWiseUnaryOp, ABC):
-    in_dtypes = [(i,) for i in DTYPE_ALL]
+    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
     def __init__(self, dtype):
         super().__init__()
@@ -2028,8 +2028,8 @@ class CastBool(Cast):
 
 @mark_materialize("core")
 class MatMul(BinaryOpBase):
-    in_dtypes = [(i, i) for i in DTYPE_NON_BOOLS]
-    out_dtypes = [(i,) for i in DTYPE_NON_BOOLS]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_NON_BOOL]
+    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
 
     def __init__(self):
         super().__init__()

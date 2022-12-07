@@ -33,6 +33,7 @@ mgen: # model gen.
   save: "nnsmith_output"
   seed: null
   max_elem_per_tensor: 65536 # 2^16
+  record_path: null # path to load records for ConcolicGenWithRecords
 
 # backend config
 backend:

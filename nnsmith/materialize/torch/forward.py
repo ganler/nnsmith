@@ -3,15 +3,18 @@ from typing import Type
 
 import torch
 
-from nnsmith.abstract.dtype import DTYPE_INTS
+from nnsmith.abstract.dtype import DTYPE_GEN_INTS
 from nnsmith.abstract.op import *
+from nnsmith.autoinf import AutoInfOpBase
 from nnsmith.materialize import framework_operator_impl
 from nnsmith.materialize.torch.dialect import Flatten, Linear, TorchReduceSum
 
 # Implementation of operators.
 
 # core dialect + some future PyTorch-only Operators.
-TORCH_REALIZABLE_OPS = FULL_OPERATOR_SETS["core"] + FULL_OPERATOR_SETS["torch"]
+TORCH_REALIZABLE_OPS = (
+    FULL_OPERATOR_SETS["core"] + FULL_OPERATOR_SETS["torch"] + [AutoInfOpBase]
+)
 ALL_TORCH_OPS: List[Type[AbsOpBase]] = []
 
 operator_impl = partial(framework_operator_impl, TORCH_REALIZABLE_OPS, ALL_TORCH_OPS)
@@ -120,7 +123,7 @@ def forward_fn(op: Div):
     return lambda up, down: torch.div(
         up,
         down,
-        rounding_mode="floor" if DType.from_torch(up.dtype) in DTYPE_INTS else None,
+        rounding_mode="floor" if DType.from_torch(up.dtype) in DTYPE_GEN_INTS else None,
     )
 
 
@@ -183,7 +186,7 @@ def forward_fn(op: Ceil):
 
 @operator_impl(Clip)
 def forward_fn(op: Clip):
-    if op.input_like[0].dtype in DTYPE_FLOATS:
+    if op.input_like[0].dtype in DTYPE_GEN_FLOATS:
         return lambda x: torch.clip(x, -1.5, 1.5)
     else:
         return lambda x: torch.clip(x, -1, 1)
@@ -442,3 +445,8 @@ def forward_fn(op: Cast):
 @operator_impl(MatMul)
 def forward_fn(op: MatMul):
     return torch.matmul
+
+
+@operator_impl(AutoInfOpBase)
+def forward_fn(op: AutoInfOpBase):
+    return op.inst.materialize(eval(op.inst.name), op.attrs)

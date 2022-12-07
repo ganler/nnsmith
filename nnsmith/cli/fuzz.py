@@ -10,6 +10,7 @@ from typing import Type
 import hydra
 from omegaconf import DictConfig
 
+from nnsmith.autoinf import make_record_finder
 from nnsmith.backends.factory import BackendFactory
 from nnsmith.cli.model_exec import verify_testcase
 from nnsmith.error import InternalError
@@ -133,6 +134,13 @@ class FuzzingLoop:
             self.ModelType, self.factory, vulops=cfg["mgen"]["vulops"]
         )
 
+        self.record_finder = None
+        if "concolic-record" == cfg["mgen"]["method"]:
+            self.record_finder = make_record_finder(
+                path=cfg["mgen"]["record_path"],
+                max_elem_per_tensor=cfg["mgen"]["max_elem_per_tensor"],
+            )
+
         seed = cfg["fuzz"]["seed"] or random.getrandbits(32)
         set_seed(seed)
 
@@ -157,8 +165,10 @@ class FuzzingLoop:
         mgen_cfg = self.cfg["mgen"]
         gen = model_gen(
             opset=self.opset,
+            record_finder=self.record_finder,
             method=mgen_cfg["method"],
             seed=seed,
+            max_elem_per_tensor=mgen_cfg["max_elem_per_tensor"],
             max_nodes=mgen_cfg["max_nodes"],
             timeout_ms=mgen_cfg["timeout_ms"],
         )

@@ -3,7 +3,7 @@ import random
 import time
 import traceback
 from abc import abstractmethod
-from typing import List, Optional, Set, Tuple, Type
+from typing import Dict, List, Optional, Set, Tuple, Type
 
 import z3
 
@@ -17,6 +17,7 @@ from nnsmith.abstract.op import (
     concretize_op,
     rank_all,
 )
+from nnsmith.autoinf import AutoInfOpBase, OpRecordFinder
 from nnsmith.error import ConstraintCheck, ConstraintError, SanityCheck
 from nnsmith.gir import GraphIR, InstExpr, InstIR
 from nnsmith.logging import MGEN_LOG, SMT_LOG
@@ -107,12 +108,12 @@ class BaseGen:
 
     def random_dtype(self):
         # more floats than ints.
-        wts = [1] * len(DTYPE_ALL)
-        for i in DTYPE_FLOATS:
-            wts[DTYPE_ALL.index(i)] = 4
-        for i in DTYPE_INTS:
-            wts[DTYPE_ALL.index(i)] = 1
-        return random.choices(DTYPE_ALL, weights=wts)[0]
+        wts = [1] * len(DTYPE_GEN_ALL)
+        for i in DTYPE_GEN_FLOATS:
+            wts[DTYPE_GEN_ALL.index(i)] = 4
+        for i in DTYPE_GEN_INTS:
+            wts[DTYPE_GEN_ALL.index(i)] = 1
+        return random.choices(DTYPE_GEN_ALL, weights=wts)[0]
 
     def new_sym(self, name):
         return z3.Int(name)
@@ -151,6 +152,10 @@ class BaseGen:
         # exclude placeholders.
         return self.ir.n_compute_inst()
 
+    def try_insert(self):
+        node_t = self.pick_next_op_type()
+        self.try_insert_node_type(node_t)
+
     def abstract_gen(self, max_node_size=10, max_gen_millisec=2000):
         assert max_node_size > 0, "max_node_size must be positive"
 
@@ -163,8 +168,7 @@ class BaseGen:
         ):
             if self.extra_exit_check():
                 break
-            node_t = self.pick_next_op_type()
-            self.try_insert_node_type(node_t)
+            self.try_insert()
 
         # init graph placeholders
         SanityCheck.gt(len(self.placeholders), 0)
@@ -293,7 +297,7 @@ class BaseGen:
 
         return False
 
-    def var_filter(self, ndims, dtype, candidates: List[str]):
+    def filter_rank_dtype(self, ndims, dtype, candidates: List[str]):
         cans = candidates
 
         cans = list(
@@ -343,7 +347,7 @@ class BaseGen:
             viable_dtypes.extend(
                 [
                     self.ir.vars[vname].dtype
-                    for vname in self.var_filter(
+                    for vname in self.filter_rank_dtype(
                         ndims=ndims, dtype=None, candidates=var_candidates
                     )
                 ]
@@ -358,7 +362,7 @@ class BaseGen:
             )
         dtype_comb = random.choice(dtype_combs)
         for i, ndims in enumerate(ndim_list):
-            candidates = self.var_filter(
+            candidates = self.filter_rank_dtype(
                 ndims=ndims, dtype=dtype_comb[i], candidates=var_candidates
             )
             abs_tensor_candidates.append(random.choice(candidates))
@@ -390,6 +394,23 @@ def check_sat(solver: z3.Solver, *assumptions) -> z3.CheckSatResult:
     return cres
 
 
+def set_z3_state(seed=None):
+    z3.set_param(
+        "smt.phase_selection",
+        5,
+        "smt.arith.random_initial_value",
+        True,
+        "smt.random_seed",
+        seed,
+        "sat.random_seed",
+        seed,
+        "sat.phase",
+        "random",
+        "memory_max_size",
+        50 * 1024,  # MB
+    )
+
+
 class SymbolicGen(BaseGen):
     def __init__(
         self,
@@ -400,20 +421,7 @@ class SymbolicGen(BaseGen):
     ):
         super().__init__(opset, seed, **kwargs)
         if seed is not None:
-            z3.set_param(
-                "smt.phase_selection",
-                5,
-                "smt.arith.random_initial_value",
-                True,
-                "smt.random_seed",
-                seed,
-                "sat.random_seed",
-                seed,
-                "sat.phase",
-                "random",
-                "memory_max_size",
-                50 * 1024,  # MB
-            )
+            set_z3_state(seed)
 
         self.solver = z3.Solver()
         self.last_solution: Optional[z3.ModelRef] = None
@@ -560,22 +568,9 @@ class ConcolicGen(BaseGen):
         init_fp=False,
         **kwargs,
     ):
-        super().__init__(opset, **kwargs)
+        super().__init__(opset, seed, **kwargs)
         if seed is not None:
-            z3.set_param(
-                "smt.phase_selection",
-                5,
-                "smt.arith.random_initial_value",
-                True,
-                "smt.random_seed",
-                seed,
-                "sat.random_seed",
-                seed,
-                "sat.phase",
-                "random",
-                "memory_max_size",
-                50 * 1024,  # MB
-            )
+            set_z3_state(seed)
 
         # Insert the first node.
         self.insert_init_ph_node(
@@ -583,7 +578,6 @@ class ConcolicGen(BaseGen):
                 self.random_rank(), dtype=DType.float32 if init_fp else None
             )
         )
-        self.solver = None
 
     def try_forward_insert_at(self, node: AbsOpBase, input_vars: List[str]) -> bool:
         solver = z3.Solver()
@@ -704,12 +698,154 @@ class ConcolicGen(BaseGen):
         return self.ir
 
 
+class ConcolicGenWithRecord(ConcolicGen):
+    """Concolic generation assisted with concrete records."""
+
+    def __init__(
+        self,
+        opset,
+        record_finder: OpRecordFinder,
+        seed=None,
+        init_fp=False,
+        **kwargs,
+    ):
+        BaseGen.__init__(self, opset, seed, **kwargs)
+        if seed is not None:
+            set_z3_state(seed)
+
+        # remove records whose tensors violate tensor_type_constraints
+        # FIXME: Strictly apply tensor_type_constraints to filter unapplicable tensors.
+        self.record_finder = record_finder
+
+        # Insert the first node.
+        self.forward_insert_node(
+            self.make_concrete_placeholder(
+                self.random_rank(), dtype=DType.float32 if init_fp else None
+            ),
+            [],
+        )
+
+    def make_concrete_placeholder(self, rank, dtype=None):
+        cand: List[AbsTensor] = []
+        for tensor in self.record_finder.producer.keys():
+            if tensor.ndims == rank and (dtype is None or tensor.dtype == dtype):
+                cand.append(tensor)
+        for tensor in self.record_finder.consumer.keys():
+            if tensor.ndims == rank and (dtype is None or tensor.dtype == dtype):
+                cand.append(tensor)
+
+        if len(cand) == 0:
+            MGEN_LOG.warning(f"No record w/ rank@{rank}<{dtype}>. Fallback to base.")
+            return super().make_concrete_placeholder(rank, dtype)
+
+        selected = random.choice(cand)
+
+        ph = Placeholder(
+            AbsTensor(
+                shape=selected.shape,
+                dtype=selected.dtype,
+            )
+        )
+        return ph
+
+    def try_concrete_forward_insert(
+        self, type2vars, op: AbsOpBase, itensors, otensors
+    ) -> bool:
+        ivars = []
+        for it in itensors:
+            if it not in type2vars:
+                break
+            ivars.append(random.choice(type2vars[it]))
+        if len(ivars) == len(itensors):
+            # forward insert
+            op.bind_input_like(itensors)
+            op.bind_output_like(otensors)
+            self.forward_insert_node(op, ivars)
+            return True
+        return False
+
+    def try_concrete_backward_insert(
+        self, type2vars: Dict[AbsTensor, List[str]], op: AbsOpBase, itensors, otensors
+    ) -> bool:
+        type2phvars = {
+            k: [v for v in vs if v in self.placeholders] for k, vs in type2vars.items()
+        }
+        # remove k with empty list
+        type2phvars = {k: vs for k, vs in type2phvars.items() if len(vs) > 0}
+
+        ovars = []
+        for ot in otensors:
+            if ot not in type2phvars:
+                break
+            # Cannot use the same variable twice.
+            cands = [v for v in type2phvars[ot] if v not in ovars]
+            ovars.append(random.choice(cands))
+
+        if len(ovars) == len(otensors):
+            # backward insert
+            # create placeholder.
+            op_ivars = []
+
+            for ttype in itensors:
+                inst = self.forward_insert_node(Placeholder(ttype=ttype), [])
+                op_ivars.append(inst.retval())
+
+            op.bind_input_like(itensors)
+            op.bind_output_like(otensors)
+            self.backward_insert_node(op, op_ivars, ovars)
+            return True
+
+        return False
+
+    def try_concrete_insert(self):
+        # Analyze the graph:
+        # 1. self.vars: ~ all tensor variables.
+        # 2. [Coarse-grained search] find records which has such variables types.
+        op_types = set()
+
+        type2vars = {}
+        for k, v in self.ir.vars.items():
+            type2vars.setdefault(v, []).append(k)
+
+        for v in type2vars:
+            op_types.update(self.record_finder.producer.get(v, set()))
+            op_types.update(self.record_finder.consumer.get(v, set()))
+
+        # 3. [Fine-grained search] find records whose inputs/outputs can be exactly matched.
+        op_types = list(op_types)
+        random.shuffle(op_types)
+
+        for op_type in op_types:
+            # check match.
+            for itensors, otensors, attr in self.record_finder.op2record[op_type]:
+                op: AbsOpBase = AutoInfOpBase(op_type, attr)
+
+                insert_method = [
+                    self.try_concrete_forward_insert,
+                    self.try_concrete_backward_insert,
+                ]
+                random.shuffle(insert_method)
+
+                for m in insert_method:
+                    if m(type2vars, op, itensors, otensors):
+                        return True
+
+        return False
+
+    def try_insert(self):
+        if random.random() < 0.5:
+            return self.try_concrete_insert()
+
+        return super().try_insert()
+
+
 def model_gen(
     opset: Set[Type[AbsOpBase]],
     method: str = "symbolic",
     max_nodes=5,
     seed=None,
     timeout_ms=20000,
+    record_finder=None,
     **kwargs,
 ):
     assert max_nodes > 0, "max_nodes must >= 1"
@@ -718,6 +854,9 @@ def model_gen(
         gen = SymbolicGen(opset, seed, **kwargs)
     elif "concolic" == method:
         gen = ConcolicGen(opset, seed, **kwargs)
+    elif "concolic-record" == method:
+        assert record_finder is not None, "record_finder must be provided"
+        gen = ConcolicGenWithRecord(opset, record_finder, seed, **kwargs)
     else:
         raise ValueError(f"Unknown method {method}. Try `symbolic` or `concolic`.")
 

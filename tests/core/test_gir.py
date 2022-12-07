@@ -7,8 +7,8 @@ from nnsmith.gir import *
 
 @mark_abstract("test")
 class FakeSwap(AbsOpBase):
-    in_dtypes = [(i, i) for i in DTYPE_ALL]
-    out_dtypes = [(i, i) for i in DTYPE_ALL]
+    in_dtypes = [(i, i) for i in DTYPE_GEN_ALL]
+    out_dtypes = [(i, i) for i in DTYPE_GEN_ALL]
 
     def __init__(self):
         super().__init__()

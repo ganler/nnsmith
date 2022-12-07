@@ -6,11 +6,14 @@ from keras import layers
 from tensorflow import keras
 
 from nnsmith.abstract.op import *
+from nnsmith.autoinf import AutoInfOpBase
 from nnsmith.materialize import framework_operator_impl
 from nnsmith.materialize.tensorflow.dialect import *
 
 # core dialect + some future PyTorch-only Operators.
-TF_REALIZABLE_OPS = FULL_OPERATOR_SETS["core"] + FULL_OPERATOR_SETS["tensorflow"]
+TF_REALIZABLE_OPS = (
+    FULL_OPERATOR_SETS["core"] + FULL_OPERATOR_SETS["tensorflow"] + [AutoInfOpBase]
+)
 # TF_REALIZABLE_OPS = [NHWCConv2dSamePad, NHWCConv2dValidPad] # [Add, Dense, LocalRespNorm]
 ALL_TF_OPS: List[Type[AbsOpBase]] = []
 
@@ -174,7 +177,7 @@ def forward_fn(op: Ceil):
 
 @operator_impl(Clip)
 def forward_fn(op: Clip):
-    if op.input_like[0].dtype in DTYPE_FLOATS:
+    if op.input_like[0].dtype in DTYPE_GEN_FLOATS:
         return lambda x: tf.clip_by_value(x, -1.5, 1.5)
     else:
         return lambda x: tf.clip_by_value(x, -1, 1)
@@ -375,3 +378,8 @@ def forward_fn(op: Cast):
 @operator_impl(MatMul)
 def forward_fn(op: MatMul):
     return tf.linalg.matmul
+
+
+@operator_impl(AutoInfOpBase)
+def forward_fn(op: AutoInfOpBase):
+    return op.inst.materialize(eval(op.inst.name), op.attrs)

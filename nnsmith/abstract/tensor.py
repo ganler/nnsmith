@@ -44,6 +44,15 @@ class AbsTensor:
     def __eq__(self, other: "AbsTensor") -> bool:
         return self.strong_compare(other)
 
+    def ge_zero(self):
+        ret = []
+        for s in self.shape:
+            if isinstance(s, z3.ExprRef):
+                ret.append(nnsmith_ge(s, 0))
+            else:
+                ConstraintCheck.ge(s, 0)
+        return ret
+
     def gt_zero(self):
         ret = []
         for s in self.shape:

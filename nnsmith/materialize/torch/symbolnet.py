@@ -8,6 +8,7 @@ import torch
 from torch import nn
 
 from nnsmith.abstract.op import AbsOpBase, Input
+from nnsmith.autoinf import AutoInfOpBase
 from nnsmith.error import ConstraintCheck, ConstraintError, SanityCheck
 from nnsmith.gir import GraphIR
 from nnsmith.logging import TORCH_LOG
@@ -339,8 +340,10 @@ class SymbolNet(nn.Module):
 
             # REAL FORWARD.
             output_tensors = inst(*input_tensors)
-            if not isinstance(output_tensors, list):
+            if isinstance(output_tensors, torch.Tensor):
                 output_tensors = [output_tensors]
+            if isinstance(output_tensors, tuple):
+                output_tensors = list(output_tensors)
 
             check_type(op, output_tensors, is_input=False, msg="output")
 
