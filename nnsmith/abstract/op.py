@@ -1736,8 +1736,10 @@ class ReduceBase(UnaryOpBase, ABC):
 
     def type_transfer(self, input_shapes: List[AbsTensor]) -> List[AbsTensor]:
         svar_list = []
+        dim_idx = self._init_reduce_dim(input_shapes[0].shape)
+        SanityCheck.lt(dim_idx, input_shapes[0].ndims)
         for i, v in enumerate(input_shapes[0].shape):
-            if i != self._init_reduce_dim(input_shapes[0].shape):
+            if i != dim_idx:
                 svar_list.append(v)
         return [
             AbsTensor(
@@ -1749,7 +1751,8 @@ class ReduceBase(UnaryOpBase, ABC):
         ]
 
     def requires(self, input_shapes: List[AbsTensor]):
-        return [nnsmith_neq(self._init_reduce_dim(input_shapes[0].shape), 0)]
+        dim_idx = self._init_reduce_dim(input_shapes[0].shape)
+        return [nnsmith_neq(input_shapes[0].shape[dim_idx], 0)]
 
     def _get_irank(self, orank):
         return orank + 1
