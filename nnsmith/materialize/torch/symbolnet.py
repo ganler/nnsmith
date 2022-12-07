@@ -8,7 +8,6 @@ import torch
 from torch import nn
 
 from nnsmith.abstract.op import AbsOpBase, Input
-from nnsmith.autoinf import AutoInfOpBase
 from nnsmith.error import ConstraintCheck, ConstraintError, SanityCheck
 from nnsmith.gir import GraphIR
 from nnsmith.logging import TORCH_LOG
@@ -16,7 +15,6 @@ from nnsmith.materialize.torch.forward import forward_fn, type_from_torch_tensor
 from nnsmith.materialize.torch.numeric import loss_fn, numeric_valid
 from nnsmith.materialize.torch.proxy_grad import proxy_fn
 
-__MB_LIM__ = 6 * 1024
 __INPUT_FOUND_NAN_MSG__ = "[NaN] in model inputs!"
 __INPUT_FOUND_INF_MSG__ = "[Inf] in model inputs!"
 __ENABLE_RT_CHECK__ = os.getenv("NNSMITH_RT_CHECK", "0") == "1"
@@ -61,11 +59,9 @@ class SymbolNet(nn.Module):
         ir: GraphIR,
         record_intermediate=False,
         use_gradient=False,
-        megabyte_lim=__MB_LIM__,
         print_grad=0,
     ):
         super(SymbolNet, self).__init__()
-        self.megabyte_lim = megabyte_lim
         self.print_grad = print_grad
         # <TorchFunc, <keys -> inputs>, <keys -> outputs>, original op>
         self.instructions = []

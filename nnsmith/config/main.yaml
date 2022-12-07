@@ -47,6 +47,7 @@ cache:
 debug:
   viz: false
   viz_fmt: "png" # or "svg" for much smaller figure size and precision;
+  gir_path: null
 
 fuzz:
   time: 14400

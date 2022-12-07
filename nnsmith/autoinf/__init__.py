@@ -1,6 +1,5 @@
 # Utilities for using and be used by autoinf.
 from dataclasses import dataclass
-from functools import partialmethod
 from os import PathLike
 from typing import Dict, List, Tuple, Type
 
@@ -51,7 +50,7 @@ ATTR_FREE_RULES = [
     Triu,
     *[
         make_concat_type(arity, axis)
-        for arity in range(1, Concat.MAX_ARITY + 1)
+        for arity in range(2, Concat.MAX_ARITY + 1)
         for axis in range(__MAX_RANK__)
     ],
 ]
@@ -134,72 +133,7 @@ class AutoInfOpBase(AbsOpBase):
         return symbol_subst
 
     def __str__(self):
-        return f"{self.inst.name}[{','.join([f'{DType.from_str(t.dtype).short()}{t.rank}' for t in self.inst.input_tensors])}]"
-
-
-def make_autoinf_op_type(inst: OpInstance):
-    def type_transfer(self, input_shapes: List[AbsTensor]) -> List[AbsTensor]:
-        raise InternalError("AutoInf type_forward not implemented. Don't try it now!")
-
-    def requires(self, input_shapes: List[AbsTensor]):
-        raise InternalError("AutoInf requires not implemented. Don't try it now!")
-
-    def deduct_inp_ranks_and_dtype(
-        self: AbsOpBase, inst: OpInstance, out_abs_tensor: List[AbsTensor]
-    ) -> List[Tuple[int, DType]]:
-        # check shape & type consistency
-        assert len(out_abs_tensor) == len(self.out_dtypes[0])
-        for i, o_aten in enumerate(out_abs_tensor):
-            SanityCheck.eq(o_aten.dtype, self.out_dtypes[0][i])
-            SanityCheck.eq(o_aten.ndims, self.out_ranks[0][i])
-
-        return [
-            tuple(tensor.rank, DType.from_str(tensor.dtype))
-            for tensor in inst.input_tensors
-        ]
-
-    def init_from_inst(self: AbsOpBase, inst: OpInstance, attr):
-        # super from self
-        super(type(self), self).__init__()
-        self.inp_ranks = [tuple(x.rank for x in inst.input_tensors)]
-        self.out_ranks = [tuple(x.rank for x in inst.output_tensors)]
-        assert set(attr.keys()) == set(inst.A), f"{list(attr.keys())} != {inst.A}"
-        self.attrs = attr
-
-    def make_substition(
-        self: AbsOpBase, inst: OpInstance, input_shapes: List[AbsTensor]
-    ):
-        symbol_subst = {}
-        # input shape subst
-        for inf_ten, smt_ten in zip(inst.input_tensors, input_shapes):
-            for name, val in zip(inf_ten.shape, smt_ten.shape):
-                symbol_subst[name] = val
-        # attr subst | update self.attrs
-        symbol_subst.update(self.attrs)
-        return symbol_subst
-
-    new_type = type(
-        f"__{inst.name.replace('.', '_')}_{'_'.join([f'{DType.from_str(t.dtype).short()}{t.rank}' for t in inst.input_tensors])}",
-        (AutoInfOpBase,),
-        {
-            "in_dtypes": [tuple(DType.from_str(x.dtype) for x in inst.input_tensors)],
-            "out_dtypes": [tuple(DType.from_str(x.dtype) for x in inst.output_tensors)],
-            "_attr_names": inst.A,
-            "__init__": partialmethod(init_from_inst, inst),
-            "make_substition": partialmethod(make_substition, inst),
-            "type_transfer": partialmethod(type_transfer),
-            "requires": partialmethod(requires),
-            "deduct_inp_ranks_and_dtype": partialmethod(
-                deduct_inp_ranks_and_dtype, inst
-            ),
-            "inst": inst,
-            "__module__": __name__,
-        },
-    )
-
-    globals()[new_type.__name__] = new_type
-
-    return new_type
+        return f"{self.inst.name}[{','.join([f'{DType.from_str(t.dtype).short()}[{t.rank}]' for t in self.inst.input_tensors])}]"
 
 
 @dataclass
@@ -218,7 +152,7 @@ def make_record_finder(
 ):
     if gen_inst_records is None:
         assert path is not None, "Either gen_inst_records or path must be provided."
-        gen_inst_records = gen_inst_with_records(data_dir=path, keep_int_value=False)
+        gen_inst_records = gen_inst_with_records(data_dir=path, int_policy="fix_dim")
 
     producer = {}
     consumer = {}
@@ -229,10 +163,16 @@ def make_record_finder(
     skipped_err = 0
     skipped_blacklist = 0
 
+    blacklisted = set()
+
     for inst, records in gen_inst_records:
         total_rec += len(records)
 
         if inst.name in [
+            "torch.gather",
+            "torch.nanquantile",
+            "torch.Tensor.rename",
+            "torch.Tensor.rename_",
             "torch.Tensor.uniform_",
             "torch.Tensor.normal_",
             "torch.Tensor.exponential_",
@@ -241,12 +181,15 @@ def make_record_finder(
             "torch.Tensor.log_normal_",
             "torch.Tensor.cauchy_",
             "torch.Tensor.logistic_",
+            "torch.Tensor.random_",
             "torch.Tensor.requires_grad_",
             "torch.nn.functional.dropout",
             "torch.nn.functional.dropout2d",
             "torch.nn.functional.dropout3d",
         ]:  # black list
-            AUTOINF_LOG.error(f"Blacklist operator {inst.name} found!")
+            if inst.name not in blacklisted:
+                AUTOINF_LOG.error(f"Blacklist operator {inst.name} found!")
+                blacklisted.add(inst.name)
             skipped_blacklist += len(records)
             continue
 

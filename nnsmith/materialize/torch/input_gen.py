@@ -1,4 +1,5 @@
 import time
+import traceback
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple
 
@@ -6,6 +7,7 @@ import torch
 
 from nnsmith.abstract.op import DType
 from nnsmith.autoinf import AutoInfOpBase
+from nnsmith.logging import TORCH_LOG
 from nnsmith.materialize.torch.symbolnet import SymbolNet, random_tensor
 
 
@@ -102,8 +104,12 @@ class PracticalHybridSearch(InputSearchBase):
             diff_test_inp = self.net.get_random_inps(use_cuda=self.use_cuda)
             for _, item in diff_test_inp.items():
                 item.requires_grad_()
-            self.net.forward(**diff_test_inp)
-            self.differentiable = self.net.differentiable
+            try:
+                self.net.forward(**diff_test_inp)
+                self.differentiable = self.net.differentiable
+            except RuntimeError:
+                TORCH_LOG.warning(traceback.format_exc())
+                self.differentiable = False
         else:
             self.differentiable = False
 

@@ -1749,8 +1749,7 @@ class ReduceBase(UnaryOpBase, ABC):
         ]
 
     def requires(self, input_shapes: List[AbsTensor]):
-        self._init_reduce_dim(input_shapes[0].shape)
-        return []
+        return [nnsmith_neq(self._init_reduce_dim(input_shapes[0].shape), 0)]
 
     def _get_irank(self, orank):
         return orank + 1

@@ -49,6 +49,7 @@ class BaseGen:
         if seed is not None:
             set_seed(seed)
 
+        self.seed = seed
         self.op_candidates = opset
         self.ir = GraphIR()
         self.monotonic_placeholder_id = 0
@@ -779,6 +780,8 @@ class ConcolicGenWithRecord(ConcolicGen):
                 break
             # Cannot use the same variable twice.
             cands = [v for v in type2phvars[ot] if v not in ovars]
+            if len(cands) == 0:
+                break
             ovars.append(random.choice(cands))
 
         if len(ovars) == len(otensors):
@@ -798,21 +801,27 @@ class ConcolicGenWithRecord(ConcolicGen):
         return False
 
     def try_concrete_insert(self):
+        if random.random() < self.forward_prob:
+            return self.try_concrete_insert_forward_()
+        else:
+            return self.try_concrete_insert_backward_()
+
+    def try_concrete_insert_forward_(self):
         # Analyze the graph:
         # 1. self.vars: ~ all tensor variables.
         # 2. [Coarse-grained search] find records which has such variables types.
-        op_types = set()
+        op_types = []
 
-        type2vars = {}
+        type2vars = {}  # available types.
         for k, v in self.ir.vars.items():
             type2vars.setdefault(v, []).append(k)
 
         for v in type2vars:
-            op_types.update(self.record_finder.producer.get(v, set()))
-            op_types.update(self.record_finder.consumer.get(v, set()))
+            for ot in self.record_finder.consumer.get(v, []):
+                if ot not in op_types:
+                    op_types.append(ot)  # operators that needs those types.
 
         # 3. [Fine-grained search] find records whose inputs/outputs can be exactly matched.
-        op_types = list(op_types)
         random.shuffle(op_types)
 
         for op_type in op_types:
@@ -820,15 +829,37 @@ class ConcolicGenWithRecord(ConcolicGen):
             for itensors, otensors, attr in self.record_finder.op2record[op_type]:
                 op: AbsOpBase = AutoInfOpBase(op_type, attr)
 
-                insert_method = [
-                    self.try_concrete_forward_insert,
-                    self.try_concrete_backward_insert,
-                ]
-                random.shuffle(insert_method)
+                if self.try_concrete_forward_insert(type2vars, op, itensors, otensors):
+                    return True
 
-                for m in insert_method:
-                    if m(type2vars, op, itensors, otensors):
-                        return True
+        return False
+
+    def try_concrete_insert_backward_(self):
+        # Analyze the graph:
+        # 1. self.vars: ~ all tensor variables.
+        # 2. [Coarse-grained search] find records which has such variables types.
+        op_types = []
+
+        type2vars = {}  # available types of placeholders!
+        for k in self.placeholders:
+            v = self.ir.vars[k]
+            type2vars.setdefault(v, []).append(k)
+
+        for v in type2vars:
+            for ot in self.record_finder.producer.get(v, []):
+                if ot not in op_types:
+                    op_types.append(ot)  # operators that produces those types.
+
+        # 3. [Fine-grained search] find records whose inputs/outputs can be exactly matched.
+        random.shuffle(op_types)
+
+        for op_type in op_types:
+            # check match.
+            for itensors, otensors, attr in self.record_finder.op2record[op_type]:
+                op: AbsOpBase = AutoInfOpBase(op_type, attr)
+
+                if self.try_concrete_backward_insert(type2vars, op, itensors, otensors):
+                    return True
 
         return False
 
