@@ -341,6 +341,8 @@ class SymbolNet(nn.Module):
             if isinstance(output_tensors, tuple):
                 output_tensors = list(output_tensors)
 
+            # FIXME: some op returns extra Nones.
+            output_tensors = output_tensors[: len(op.output_like)]
             check_type(op, output_tensors, is_input=False, msg="output")
 
             for i, out_key in enumerate(outs):
