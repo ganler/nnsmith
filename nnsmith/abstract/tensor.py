@@ -53,6 +53,15 @@ class AbsTensor:
                 ConstraintCheck.ge(s, 0)
         return ret
 
+    def sym_gt_conc_ge_zero(self):
+        ret = []
+        for s in self.shape:
+            if isinstance(s, z3.ExprRef):
+                ret.append(nnsmith_gt(s, 0))
+            else:
+                ConstraintCheck.ge(s, 0)
+        return ret
+
     def gt_zero(self):
         ret = []
         for s in self.shape:

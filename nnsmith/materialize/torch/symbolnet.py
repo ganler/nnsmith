@@ -346,8 +346,11 @@ class SymbolNet(nn.Module):
             for i, out_key in enumerate(outs):
                 # put values back to tensor_map.
                 tensor_map[out_key] = output_tensors[i]
-                # Check differentiability.
-                self.differentiable &= output_tensors[i].grad_fn is not None
+                try:
+                    if output_tensors[i].grad_fn is None:
+                        self.differentiable = False
+                except RuntimeError:
+                    self.differentiable = False
                 # TODO(@ganler): optimize: unref tensors that are not going to be used anymore.
 
             # LOG.

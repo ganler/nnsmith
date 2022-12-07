@@ -27,7 +27,7 @@ model:
 
 mgen: # model gen.
   max_nodes: 5
-  timeout_ms: 50000
+  timeout_ms: 10000
   vulops: False
   method: "symbolic"
   save: "nnsmith_output"

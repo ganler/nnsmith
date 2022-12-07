@@ -919,6 +919,9 @@ class Pool2d(UnaryOpBase):
         cons.append(nnsmith_le(self.padding, 255))
         cons.append(nnsmith_le(self.padding, nnsmith_div(self.kernel_h_size, 2)))
         cons.append(nnsmith_le(self.padding, nnsmith_div(self.kernel_w_size, 2)))
+        cons.extend(
+            [nnsmith_gt(v, 0) for v in input_shapes[0].shape]
+        )  # dim cannot be 0 for maxpool
 
         # limit FLOPS
         if Z3_CONS_FLOPS:
@@ -1673,7 +1676,9 @@ class InterpBase(UnaryOpBase):
         self.out_ranks = [(len(size) + 2,)]
 
     def requires(self, input_shapes: List[AbsTensor]):
-        return [nnsmith_gt(v, 0) for v in self.size]
+        return [nnsmith_gt(v, 0) for v in self.size] + [
+            nnsmith_gt(v, 0) for v in input_shapes[0].shape
+        ]
 
     def type_transfer(self, input_shapes: List[AbsTensor]) -> List[AbsTensor]:
         shape = list(input_shapes[0].shape)

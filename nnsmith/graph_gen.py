@@ -125,7 +125,7 @@ class BaseGen:
     def insert_init_ph_node(self, ph: Placeholder) -> InstIR:
         inst = self.forward_insert_node(ph, [])
 
-        for c in ph.ttype.gt_zero():
+        for c in ph.ttype.sym_gt_conc_ge_zero():
             self.assume(c)
 
         return inst
@@ -142,7 +142,7 @@ class BaseGen:
     def make_concrete(self) -> GraphIR:
         raise NotImplementedError
 
-    def extra_exit_check(self) -> bool:
+    def extra_exit_check(self, max_node_size) -> bool:
         """
         Returns:
             bool: add more checks to determine whether to exit the generation.
@@ -158,6 +158,8 @@ class BaseGen:
         self.try_insert_node_type(node_t)
 
     def abstract_gen(self, max_node_size=10, max_gen_millisec=2000):
+        z3.set_param("timeout", max_gen_millisec // 3)
+
         assert max_node_size > 0, "max_node_size must be positive"
 
         init_time = time.time()
@@ -167,7 +169,7 @@ class BaseGen:
             time.time() - init_time < max_gen_millisec / 1000
             and self.num_op() < max_node_size
         ):
-            if self.extra_exit_check():
+            if self.extra_exit_check(max_node_size):
                 break
             self.try_insert()
 
@@ -307,9 +309,7 @@ class BaseGen:
             )
         )
         if len(cans) == 0:
-            raise RequiredDimNotFound(
-                f"Cannot find a shape variable with #dimensions {ndims}."
-            )
+            raise RequiredDimNotFound(f"Cannot find candidate to sat rank of {ndims}.")
 
         if dtype is not None:
             cans = list(
@@ -319,7 +319,7 @@ class BaseGen:
             )
             if len(cans) == 0:
                 raise RequiredDimNotFound(
-                    f"Cannot find a shape variable with #dimensions {ndims} and dtype {dtype}."
+                    f"Cannot find candidate to sat rank of {ndims} and dtype {dtype}."
                 )
 
         return cans
@@ -339,8 +339,20 @@ class BaseGen:
         if var_candidates is None:
             var_candidates = list(self.ir.vars.keys())
 
+        # check if can gen var group data types:
+        dtypes_in_ir = set([self.ir.vars[vname].dtype for vname in var_candidates])
+        if dtypes_in_ir.isdisjoint(set(DTYPE_GEN_ALL)):
+            raise RequiredDimNotFound(
+                f"DType unsat in IR (possibly due to complex64/128 dtypes)."
+            )
+
         abs_tensor_candidates = []
         if MGEN_LOG.getEffectiveLevel() <= logging.DEBUG:
+            for cand in var_candidates:
+                MGEN_LOG.debug(
+                    f"Candidate: {cand}: {self.ir.vars[cand].dtype} ~ {self.ir.vars[cand].ndims}"
+                )
+            MGEN_LOG.debug(f"Input data ranks candidates: {ndim_list}")
             MGEN_LOG.debug(f"Input data types candidates: {dtype_combs_spec}")
 
         viable_dtypes = []
@@ -548,10 +560,6 @@ class SymbolicGen(BaseGen):
 
         return True
 
-    def abstract_gen(self, max_node_size=10, max_gen_millisec=2000):
-        z3.set_param("timeout", max_gen_millisec // 3)
-        return super().abstract_gen(max_node_size, max_gen_millisec)
-
     def make_concrete(self) -> GraphIR:
         SanityCheck.not_none(self.last_solution, "Run check_sat first!")
         self.ir.concretize(self.last_solution)
@@ -593,7 +601,7 @@ class ConcolicGen(BaseGen):
         otensors = node.checked_type_transfer(itensors)
 
         for aten in otensors:
-            for c in aten.gt_zero():
+            for c in aten.sym_gt_conc_ge_zero():
                 constraints.append(c)
 
         check_res = check_sat(solver, *constraints)
@@ -643,7 +651,7 @@ class ConcolicGen(BaseGen):
                 rank if rank != -1 else self.random_rank(), dtype=dtype
             )
             phs_as_op_inputs.append(ph)
-            constraints.extend(ph.ttype.gt_zero())
+            constraints.extend(ph.ttype.sym_gt_conc_ge_zero())
 
         itensors = [p.ttype for p in phs_as_op_inputs]
         constraints.extend(node.checked_requires(itensors))
@@ -651,7 +659,7 @@ class ConcolicGen(BaseGen):
 
         for i, shape in enumerate(inferred_otensors):
             constraints.extend(shape.eq(otensors[i]))
-            constraints.extend(shape.gt_zero())
+            constraints.extend(shape.sym_gt_conc_ge_zero())
 
         check_res = check_sat(solver, *constraints)
 
@@ -728,11 +736,12 @@ class ConcolicGenWithRecord(ConcolicGen):
 
     def make_concrete_placeholder(self, rank, dtype=None):
         cand: List[AbsTensor] = []
+        dtype_cand = [dtype] if dtype is not None else DTYPE_GEN_ALL
         for tensor in self.record_finder.producer.keys():
-            if tensor.ndims == rank and (dtype is None or tensor.dtype == dtype):
+            if tensor.ndims == rank and tensor.dtype in dtype_cand:
                 cand.append(tensor)
         for tensor in self.record_finder.consumer.keys():
-            if tensor.ndims == rank and (dtype is None or tensor.dtype == dtype):
+            if tensor.ndims == rank and tensor.dtype in dtype_cand:
                 cand.append(tensor)
 
         if len(cand) == 0:
@@ -800,12 +809,6 @@ class ConcolicGenWithRecord(ConcolicGen):
 
         return False
 
-    def try_concrete_insert(self):
-        if random.random() < self.forward_prob:
-            return self.try_concrete_insert_forward_()
-        else:
-            return self.try_concrete_insert_backward_()
-
     def try_concrete_insert_forward_(self):
         # Analyze the graph:
         # 1. self.vars: ~ all tensor variables.
@@ -865,9 +868,30 @@ class ConcolicGenWithRecord(ConcolicGen):
 
     def try_insert(self):
         if random.random() < 0.5:
-            return self.try_concrete_insert()
+            if random.random() < self.forward_prob:
+                if self.try_concrete_insert_forward_():
+                    self.symbolic_impossible = 0
+                    return True
+            else:
+                if self.try_concrete_insert_backward_():
+                    self.symbolic_impossible = 0
+                    return True
+
+        # This can be impossible if there is a dtype mismatch.
+        dtypes_in_ir = set([t.dtype for t in self.ir.vars.values()])
+        if dtypes_in_ir.isdisjoint(set(DTYPE_GEN_ALL)):
+            self.symbolic_impossible += 1
+            return False
 
         return super().try_insert()
+
+    def extra_exit_check(self, max_node_size):
+        # Check if all tensors are used.
+        return self.symbolic_impossible >= max_node_size
+
+    def abstract_gen(self, max_node_size=10, max_gen_millisec=2000):
+        self.symbolic_impossible = 0
+        return super().abstract_gen(max_node_size, max_gen_millisec)
 
 
 def model_gen(
@@ -875,7 +899,7 @@ def model_gen(
     method: str = "symbolic",
     max_nodes=5,
     seed=None,
-    timeout_ms=20000,
+    timeout_ms=10000,
     record_finder=None,
     **kwargs,
 ):
