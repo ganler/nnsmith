@@ -171,6 +171,7 @@ def make_record_finder(
         if inst.name in [
             "torch.gather",
             "torch.nanquantile",
+            "torch.Tensor.resize_as_",  # resize_as_ can't be represented in the JIT at the moment ...
             "torch.Tensor.rename",
             "torch.Tensor.rename_",
             "torch.Tensor.uniform_",

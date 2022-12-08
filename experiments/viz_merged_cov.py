@@ -16,8 +16,7 @@ plt.rc("ytick", labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
 plt.rc("legend", fontsize=MEDIUM_SIZE - 1)  # legend fontsize
 plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-MIN_FAC_TWO = None
-MIN_FAC = None
+MIN_FAC = 0.7
 
 plt.rc("text", usetex=True)
 plt.rc("text.latex", preamble=r"\usepackage{xfrac}")
@@ -401,8 +400,6 @@ if "__main__" == __name__:
     elif args.ort:
         pass_filter = ort_pass_filter
         target_tag = "ort_"
-    else:
-        print(f"[WARNING] No pass filter is used (use --tvm or --ort)")
 
     arith_filter = None
     if args.tvm:
@@ -411,8 +408,6 @@ if "__main__" == __name__:
     elif args.ort:
         arith_filter = None
         MIN_FAC = 0.7
-    else:
-        print(f"[WARNING] No pass filter is used (use --tvm or --ort)")
 
     data = {}
     gen_time = None

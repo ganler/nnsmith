@@ -11,7 +11,7 @@ def main(cfg: DictConfig):
     gir_path = cfg["debug"]["gir_path"]
     with open(gir_path, "rb") as f:
         gir = pickle.load(f)
-    print(gir.pretty())
+    print(gir)
     print("\n === AutoInfOpBase instances: ===")
     for inst in gir.insts:
         if isinstance(inst.iexpr.op, AutoInfOpBase):
