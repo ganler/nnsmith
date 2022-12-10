@@ -1099,6 +1099,8 @@ class Pad(UnaryOpBase):
                     nnsmith_add(pad[i * 2 + 1], nnsmith_add(pad[i * 2], isv[j])), 0
                 )
             )
+        for s in input_shapes[0].shape[1:]:
+            cons.append(nnsmith_gt(s, 0))
         return cons
 
     def type_transfer(self, input_shapes: List[AbsTensor]) -> List[AbsTensor]:
