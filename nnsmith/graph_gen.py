@@ -829,8 +829,13 @@ class ConcolicGenWithRecord(ConcolicGen):
 
         for op_type in op_types:
             # check match.
-            for itensors, otensors, attr in self.record_finder.op2record[op_type]:
-                op: AbsOpBase = AutoInfOpBase(op_type, attr)
+            for itensors, otensors, attrs in self.record_finder.op2record[op_type]:
+                op: AbsOpBase = AutoInfOpBase(
+                    op_type,
+                    itypes=tuple(t.dtype for t in itensors),
+                    otypes=tuple(t.dtype for t in otensors),
+                    attrs=attrs,
+                )
 
                 if self.try_concrete_forward_insert(type2vars, op, itensors, otensors):
                     return True
@@ -858,8 +863,13 @@ class ConcolicGenWithRecord(ConcolicGen):
 
         for op_type in op_types:
             # check match.
-            for itensors, otensors, attr in self.record_finder.op2record[op_type]:
-                op: AbsOpBase = AutoInfOpBase(op_type, attr)
+            for itensors, otensors, attrs in self.record_finder.op2record[op_type]:
+                op: AbsOpBase = AutoInfOpBase(
+                    op_type,
+                    itypes=tuple(t.dtype for t in itensors),
+                    otypes=tuple(t.dtype for t in otensors),
+                    attrs=attrs,
+                )
 
                 if self.try_concrete_backward_insert(type2vars, op, itensors, otensors):
                     return True

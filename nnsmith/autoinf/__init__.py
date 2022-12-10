@@ -85,13 +85,17 @@ class AutoInfOpBase(AbsOpBase):
     def attr_names(self):
         return self.inst.A
 
-    def __init__(self, inst: OpInstance, attrs):
+    def __init__(
+        self, inst: OpInstance, itypes: Tuple[DType], otypes: Tuple[DType], attrs
+    ):
         # super from self
         self.extra_attrs = {}
         self.attrs = attrs
         self.inst = inst
         self.inp_ranks = [tuple(x.rank for x in inst.input_tensors)]
         self.out_ranks = [tuple(x.rank for x in inst.output_tensors)]
+        self.itypes = itypes
+        self.otypes = otypes
         assert set(attrs.keys()) == set(inst.A), f"{list(attrs.keys())} != {inst.A}"
 
     def n_input(self) -> int:
@@ -133,7 +137,7 @@ class AutoInfOpBase(AbsOpBase):
         return symbol_subst
 
     def __str__(self):
-        return f"{self.inst.name}[{','.join([f'{DType.from_str(t.dtype).short()}[{t.rank}]' for t in self.inst.input_tensors])}]"
+        return f"{self.inst.name}[{','.join([f'{ity.short()}[{ite.rank}]' for ite, ity in zip(self.inst.input_tensors, self.itypes)])}]"
 
 
 @dataclass
@@ -197,9 +201,9 @@ def make_record_finder(
         for record in records:
             try:
                 input_abs_tensor = [
-                    AbsTensor(shape, DType.from_str(inften.dtype))
-                    for inften, shape in zip(
-                        inst.input_tensors, inst.concrete_input_shapes(record[0])
+                    AbsTensor(shape, DType.from_str(dtype))
+                    for shape, dtype in zip(
+                        inst.concrete_input_shapes(record[0]), record[2]
                     )
                 ]
                 if any([x.nelement() > max_elem_per_tensor for x in input_abs_tensor]):
@@ -215,9 +219,9 @@ def make_record_finder(
 
             try:
                 output_abs_tensor = [
-                    AbsTensor(shape, DType.from_str(inften.dtype))
-                    for inften, shape in zip(
-                        inst.output_tensors, inst.concrete_output_shapes(record[1])
+                    AbsTensor(shape, DType.from_str(dtype))
+                    for shape, dtype in zip(
+                        inst.concrete_output_shapes(record[1]), record[3]
                     )
                 ]
                 if any([x.nelement() > max_elem_per_tensor for x in output_abs_tensor]):
