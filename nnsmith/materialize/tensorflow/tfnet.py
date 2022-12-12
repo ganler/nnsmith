@@ -71,8 +71,11 @@ class TFNet(tf.Module):
             out_tensors = instr.fwd_fn(
                 *inp_tensors
             )  # TODO Colin when it can return a list?
-            if not isinstance(out_tensors, list):
+
+            if isinstance(out_tensors, tf.Tensor):
                 out_tensors = [out_tensors]
+            if isinstance(out_tensors, tuple):
+                out_tensors = list(out_tensors)
 
             # store outputs
             for i_out, out_key in enumerate(instr.out_keys):
