@@ -73,7 +73,7 @@ class Ploter:
             "markeredgewidth": 1.5,
         }
 
-        self.axs[0].plot(df[:, 0], df[:, 2], label=name, **style_kw)  # cov / time
+        self.axs[0].plot(df[:, 0] / 60, df[:, 2], label=name, **style_kw)  # cov / time
         print(
             f"----> max cov {df[:, 2].max() * self.scale} + max tests {int(df[:, 1].max())}"
         )
@@ -126,7 +126,7 @@ class Ploter:
         ylabel = "\# Coverage"
         if self.scale != 1:
             ylabel = f"\# Coverage ({self.scale} branches)"
-        self.axs[0].set(xlabel="Time (Second)", ylabel=ylabel)
+        self.axs[0].set(xlabel="Time (Minute)", ylabel=ylabel)
         self.axs[0].grid(alpha=0.5, ls=":")
 
         self.axs[1].set(xlabel="\# Iteration", ylabel=ylabel)
