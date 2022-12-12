@@ -758,7 +758,7 @@ class ConcolicGenWithRecord(ConcolicGen):
         )
         return ph
 
-    def try_concrete_forward_insert(
+    def try_concrete_forward_insert_op(
         self, type2vars, op: AbsOpBase, itensors, otensors
     ) -> bool:
         ivars = []
@@ -774,7 +774,7 @@ class ConcolicGenWithRecord(ConcolicGen):
             return True
         return False
 
-    def try_concrete_backward_insert(
+    def try_concrete_backward_insert_op(
         self, type2vars: Dict[AbsTensor, List[str]], op: AbsOpBase, itensors, otensors
     ) -> bool:
         type2phvars = {
@@ -809,7 +809,7 @@ class ConcolicGenWithRecord(ConcolicGen):
 
         return False
 
-    def try_concrete_insert_forward_(self):
+    def try_concrete_insert_forward(self):
         # Analyze the graph:
         # 1. self.vars: ~ all tensor variables.
         # 2. [Coarse-grained search] find records which has such variables types.
@@ -837,12 +837,14 @@ class ConcolicGenWithRecord(ConcolicGen):
                     attrs=attrs,
                 )
 
-                if self.try_concrete_forward_insert(type2vars, op, itensors, otensors):
+                if self.try_concrete_forward_insert_op(
+                    type2vars, op, itensors, otensors
+                ):
                     return True
 
         return False
 
-    def try_concrete_insert_backward_(self):
+    def try_concrete_insert_backward(self):
         # Analyze the graph:
         # 1. self.vars: ~ all tensor variables.
         # 2. [Coarse-grained search] find records which has such variables types.
@@ -871,7 +873,9 @@ class ConcolicGenWithRecord(ConcolicGen):
                     attrs=attrs,
                 )
 
-                if self.try_concrete_backward_insert(type2vars, op, itensors, otensors):
+                if self.try_concrete_backward_insert_op(
+                    type2vars, op, itensors, otensors
+                ):
                     return True
 
         return False
@@ -879,11 +883,11 @@ class ConcolicGenWithRecord(ConcolicGen):
     def try_insert(self):
         if random.random() < 0.5:
             if random.random() < self.forward_prob:
-                if self.try_concrete_insert_forward_():
+                if self.try_concrete_insert_forward():
                     self.symbolic_impossible = 0
                     return True
             else:
-                if self.try_concrete_insert_backward_():
+                if self.try_concrete_insert_backward():
                     self.symbolic_impossible = 0
                     return True
 
@@ -902,6 +906,10 @@ class ConcolicGenWithRecord(ConcolicGen):
     def abstract_gen(self, max_node_size=10, max_gen_millisec=2000):
         self.symbolic_impossible = 0
         return super().abstract_gen(max_node_size, max_gen_millisec)
+
+
+class ConcolicGenWithRule(ConcolicGenWithRecord):
+    pass
 
 
 def model_gen(
