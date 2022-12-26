@@ -42,7 +42,7 @@ class BaseGen:
         opset,
         seed=None,
         forward_prob=None,
-        ph_dim_range=(1, 64),
+        concr_ph_dim_rng=(1, 64),
         max_elem_per_tensor=2**16,
     ):
         assert len(opset) > 0, "opset must not be empty"
@@ -58,7 +58,7 @@ class BaseGen:
         self.placeholders: List[str] = []
         # for all (including newly created tmp) placeholders
         self.forward_prob = 0.5 if forward_prob is None else forward_prob
-        self.ph_dim_range = ph_dim_range
+        self.concr_ph_dim_rng = concr_ph_dim_rng
         self.max_elem_per_tensor = max_elem_per_tensor
 
     def random_rank(self):
@@ -75,7 +75,7 @@ class BaseGen:
 
     def make_symbolic_placeholder(self, rank, dtype=None) -> Placeholder:
         syms = self.new_syms(
-            ["v%s_%s" % (self.monotonic_placeholder_id, k) for k in range(rank)]
+            [f"ph{self.monotonic_placeholder_id}_{k}" for k in range(rank)]
         )
         ph = Placeholder(
             AbsTensor(
@@ -85,8 +85,8 @@ class BaseGen:
         self.monotonic_placeholder_id += 1
         return ph
 
-    def make_concrete_placeholder(self, rank, dtype=None):
-        l, r = self.ph_dim_range
+    def make_random_concrete_placeholder(self, rank, dtype=None):
+        l, r = self.concr_ph_dim_rng
         shape = []
         product = 1
         for _ in range(rank):
@@ -430,6 +430,7 @@ class SymbolicGen(BaseGen):
         opset,
         seed=None,
         init_fp=False,
+        symbolic_init=True,
         **kwargs,
     ):
         super().__init__(opset, seed, **kwargs)
@@ -440,9 +441,15 @@ class SymbolicGen(BaseGen):
         self.last_solution: Optional[z3.ModelRef] = None
 
         # Insert the first node.
-        ph = self.make_symbolic_placeholder(
-            self.random_rank(), dtype=DType.float32 if init_fp else None
-        )
+        if symbolic_init:
+            ph = self.make_symbolic_placeholder(
+                self.random_rank(), dtype=DType.float32 if init_fp else None
+            )
+        else:
+            ph = self.make_random_concrete_placeholder(
+                self.random_rank(), dtype=DType.float32 if init_fp else None
+            )
+
         self.insert_init_ph_node(ph)
         for pred in self.tensor_type_constraints(ph.ttype):
             self.assume(pred)
@@ -583,7 +590,7 @@ class ConcolicGen(BaseGen):
 
         # Insert the first node.
         self.insert_init_ph_node(
-            self.make_concrete_placeholder(
+            self.make_random_concrete_placeholder(
                 self.random_rank(), dtype=DType.float32 if init_fp else None
             )
         )
@@ -728,13 +735,13 @@ class ConcolicGenWithRecord(ConcolicGen):
 
         # Insert the first node.
         self.forward_insert_node(
-            self.make_concrete_placeholder(
+            self.make_random_concrete_placeholder(
                 self.random_rank(), dtype=DType.float32 if init_fp else None
             ),
             [],
         )
 
-    def make_concrete_placeholder(self, rank, dtype=None):
+    def make_random_concrete_placeholder(self, rank, dtype=None):
         cand: List[AbsTensor] = []
         dtype_cand = [dtype] if dtype is not None else DTYPE_GEN_ALL
         for tensor in self.record_finder.producer.keys():
@@ -746,7 +753,7 @@ class ConcolicGenWithRecord(ConcolicGen):
 
         if len(cand) == 0:
             MGEN_LOG.warning(f"No record w/ rank@{rank}<{dtype}>. Fallback to base.")
-            return super().make_concrete_placeholder(rank, dtype)
+            return super().make_random_concrete_placeholder(rank, dtype)
 
         selected = random.choice(cand)
 
@@ -923,8 +930,10 @@ def model_gen(
 ):
     assert max_nodes > 0, "max_nodes must >= 1"
 
-    if "symbolic" == method:
-        gen = SymbolicGen(opset, seed, **kwargs)
+    if "symbolic" == method or "symbolic-sinit" == method:
+        gen = SymbolicGen(opset, seed, symbolic_init=True, **kwargs)
+    elif "symbolic-cinit" == method:
+        gen = SymbolicGen(opset, seed, symbolic_init=False, **kwargs)
     elif "concolic" == method:
         gen = ConcolicGen(opset, seed, **kwargs)
     elif "concolic-record" == method:
